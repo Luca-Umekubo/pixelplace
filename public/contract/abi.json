@@ -1,0 +1,123 @@
+[
+    {
+      "name": "PixelsUpdated",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "count",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false,
+      "type": "event"
+    },
+    {
+      "stateMutability": "nonpayable",
+      "type": "constructor",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "stateMutability": "view",
+      "type": "function",
+      "name": "can_update",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "stateMutability": "view",
+      "type": "function",
+      "name": "get_canvas_dimensions",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "stateMutability": "view",
+      "type": "function",
+      "name": "get_cool_down_period",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "stateMutability": "view",
+      "type": "function",
+      "name": "get_pixel",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "uint256"
+        },
+        {
+          "name": "y",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "stateMutability": "nonpayable",
+      "type": "function",
+      "name": "set_cool_down_period",
+      "inputs": [
+        {
+          "name": "new_period",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "stateMutability": "nonpayable",
+      "type": "function",
+      "name": "set_pixels",
+      "inputs": [
+        {
+          "name": "x_coords",
+          "type": "uint256[]"
+        },
+        {
+          "name": "y_coords",
+          "type": "uint256[]"
+        },
+        {
+          "name": "colors",
+          "type": "uint8[]"
+        }
+      ],
+      "outputs": []
+    }
+  ]

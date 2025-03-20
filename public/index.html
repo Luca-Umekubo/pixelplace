@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web3 Pixel Canvas</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        #canvas-container {
+            border: 1px solid #ccc;
+            background-color: white;
+            position: relative;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        #pixel-canvas {
+            display: block;
+        }
+        #color-palette {
+            display: flex;
+            justify-content: center;
+            margin: 15px 0;
+            gap: 8px;
+            flex-wrap: wrap;
+            max-width: 500px;
+        }
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.1s;
+        }
+        .color-option.selected {
+            border: 2px solid black;
+            transform: scale(1.1);
+        }
+        #controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            min-height: 20px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .info {
+            background-color: #d9edf7;
+            color: #31708f;
+        }
+        #connect-wallet {
+            margin-bottom: 20px;
+        }
+        #selected-pixels {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        #cooldown-timer {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Web3 Pixel Canvas</h1>
+    
+    <div id="container">
+        <button id="connect-wallet">Connect Wallet</button>
+        <div id="wallet-status" class="info">Not connected</div>
+        
+        <div id="canvas-container">
+            <canvas id="pixel-canvas" width="500" height="500"></canvas>
+        </div>
+        
+        <div id="color-palette"></div>
+        
+        <div id="controls">
+            <div id="selected-pixels">Selected: 0/25 pixels</div>
+            <div id="cooldown-timer"></div>
+            <button id="clear-selection" disabled>Clear Selection</button>
+            <button id="submit-pixels" disabled>Submit to Blockchain</button>
+        </div>
+        
+        <div id="status" class="info">Connect your wallet to start</div>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    
+    <!-- Ethers.js -->
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    
+    <!-- App -->
+    <script src="./app.js"></script>
+</body>
+</html>
