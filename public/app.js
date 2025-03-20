@@ -9,11 +9,8 @@ const firebaseConfig = {
     appId: "YOUR_APP_ID"
 };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
 // Contract configuration
-const contractAddress = "YOUR_CONTRACT_ADDRESS"; // Fill after deployment
+const contractAddress = "0xaC2F161898a9541292C9D35e0aeB496709131248"; // Fill after deployment
 const CANVAS_WIDTH = 100;
 const CANVAS_HEIGHT = 100;
 const MAX_PIXELS_PER_TRANSACTION = 25;
@@ -29,6 +26,7 @@ let selectedPixels = [];
 let canvasData = Array(CANVAS_WIDTH * CANVAS_HEIGHT).fill(0);
 let cooldownEndTime = 0;
 let cooldownInterval;
+let db = null;
 
 // UI elements
 const canvas = document.getElementById('pixel-canvas');
@@ -44,10 +42,10 @@ const cooldownTimerDiv = document.getElementById('cooldown-timer');
 
 // Color palette - 16 colors
 const colors = [
+    '#FFFFFF', // White (index 0 for default)
     '#000000', // Black
     '#808080', // Grey
     '#D3D3D3', // Light Grey
-    '#FFFFFF', // White
     '#FF0000', // Red
     '#FFA500', // Orange
     '#8B4513', // Brown
@@ -62,12 +60,65 @@ const colors = [
     '#F5DEB3'  // Tan/Skin color
 ];
 
+// Initialize Firebase with error handling
+function initializeFirebase() {
+    // Check if Firebase config has been properly set
+    const isConfigValid = firebaseConfig && 
+                         firebaseConfig.apiKey !== "YOUR_API_KEY" &&
+                         firebaseConfig.projectId !== "YOUR_PROJECT_ID";
+    
+    if (!isConfigValid) {
+        console.warn("Firebase configuration is missing or using placeholder values. Firestore functionality will be limited.");
+        return false;
+    }
+    
+    try {
+        firebase.initializeApp(firebaseConfig);
+        return true;
+    } catch (error) {
+        console.error("Firebase initialization error:", error);
+        return false;
+    }
+}
+
+// Store and load from localStorage as a fallback
+function saveCanvasToLocalStorage() {
+    try {
+        localStorage.setItem('pixelCanvasData', JSON.stringify(canvasData));
+        localStorage.setItem('pixelCanvasLastUpdated', Date.now());
+    } catch (error) {
+        console.error('Error saving to localStorage:', error);
+    }
+}
+
+function loadCanvasFromLocalStorage() {
+    try {
+        const savedData = localStorage.getItem('pixelCanvasData');
+        if (savedData) {
+            canvasData = JSON.parse(savedData);
+            console.log('Loaded canvas data from localStorage');
+            return true;
+        }
+    } catch (error) {
+        console.error('Error loading from localStorage:', error);
+    }
+    return false;
+}
+
 // Initialize app
 async function init() {
     try {
+        // Try to load canvas data from localStorage first
+        loadCanvasFromLocalStorage();
+        
         // Load ABI
-        const response = await fetch('./contract/abi.json');
-        contractABI = await response.json();
+        try {
+            const response = await fetch('./contract/abi.json');
+            contractABI = await response.json();
+            console.log("ABI loaded successfully");
+        } catch (error) {
+            console.error("Error loading ABI:", error);
+        }
         
         // Set up event listeners
         setupEventListeners();
@@ -78,13 +129,18 @@ async function init() {
         // Initialize color palette
         initColorPalette();
         
+        // Initialize Firebase with error handling
+        const firebaseInitialized = initializeFirebase();
+        if (firebaseInitialized) {
+            db = firebase.firestore();
+            // Subscribe to canvas updates in Firestore
+            subscribeToCanvasUpdates();
+        }
+        
         // Try to connect to previously connected wallet
         if (window.ethereum && window.ethereum.selectedAddress) {
             connectWallet();
         }
-        
-        // Subscribe to canvas updates in Firestore
-        subscribeToCanvasUpdates();
     } catch (error) {
         console.error('Initialization error:', error);
         updateStatus('Failed to initialize the application', 'error');
@@ -106,6 +162,9 @@ function initCanvas() {
     
     // Draw empty canvas
     drawCanvas();
+    
+    // Add hover effects
+    addCanvasHoverEffects();
     
     // Adjust canvas container to match
     const canvasContainer = document.getElementById('canvas-container');
@@ -175,43 +234,28 @@ async function connectWallet() {
         const userAddress = await signer.getAddress();
         console.log("Connected address:", userAddress);
         
-        // Check network - works with both v5 and v6
+        // Check network
         const network = await provider.getNetwork();
         console.log("Connected to network:", network);
         
         // Different chainId property location in v5 vs v6
         const chainId = network.chainId ? network.chainId : network.id;
+        console.log("Chain ID:", chainId);
+        
         if (chainId !== 11155111n && chainId !== 11155111) { // Support both BigInt and Number
             console.error("Wrong network");
-            
-            // Try to switch network
-            try {
-                await window.ethereum.request({
-                    method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: '0xaa36a7' }], // 0xaa36a7 is hex for 11155111 (Sepolia)
-                });
-                // Reload the page after network switch
-                window.location.reload();
-                return;
-            } catch (switchError) {
-                console.error("Failed to switch network:", switchError);
-                updateStatus('Please switch to Sepolia testnet in your wallet', 'error');
-                walletStatusDiv.textContent = 'Connected to wrong network';
-                walletStatusDiv.className = 'error';
-                return;
-            }
+            updateStatus('Please switch to Sepolia testnet in your wallet', 'error');
+            walletStatusDiv.textContent = 'Connected to wrong network';
+            walletStatusDiv.className = 'error';
+            return;
         }
         
         // Initialize contract
-        console.log("Contract address:", contractAddress);
-        console.log("Contract ABI:", contractABI);
-        
-        if (ethers.version && ethers.version.startsWith('6.')) {
-            // Ethers v6
+        if (contractABI) {
+            console.log("Initializing contract at address:", contractAddress);
             contract = new ethers.Contract(contractAddress, contractABI, signer);
         } else {
-            // Ethers v5
-            contract = new ethers.Contract(contractAddress, contractABI, signer);
+            console.error("Contract ABI not loaded");
         }
         
         // Update UI
@@ -374,10 +418,16 @@ function drawCanvas() {
         ctx.lineTo(CANVAS_WIDTH * pixelSize, y * pixelSize);
         ctx.stroke();
     }
-    
-    // Add hover effect for better pixel selection
+}
+
+// Add a separate function for hover effects to prevent artifacts
+function addCanvasHoverEffects() {
     canvas.onmousemove = function(e) {
+        // Redraw the canvas first to clear any previous hover effects
+        drawCanvas();
+        
         const rect = canvas.getBoundingClientRect();
+        const pixelSize = Math.floor(canvas.width / CANVAS_WIDTH);
         const mouseX = Math.floor((e.clientX - rect.left) / (canvas.width / CANVAS_WIDTH));
         const mouseY = Math.floor((e.clientY - rect.top) / (canvas.height / CANVAS_HEIGHT));
         
@@ -396,16 +446,49 @@ function drawCanvas() {
             }
         }
     };
+    
+    // Clear hover effect when mouse leaves canvas
+    canvas.onmouseleave = function() {
+        drawCanvas();
+    };
 }
 
 // Submit pixels to blockchain
 async function submitPixelsToBlockchain() {
-    if (!walletConnected || selectedPixels.length === 0) {
+    if (selectedPixels.length === 0) {
         return;
     }
     
     try {
         updateStatus('Submitting pixels to blockchain...', 'info');
+        
+        // Update local state first
+        selectedPixels.forEach(pixel => {
+            const index = pixel.y * CANVAS_WIDTH + pixel.x;
+            canvasData[index] = pixel.color;
+        });
+        
+        // Save to localStorage regardless of blockchain connectivity
+        saveCanvasToLocalStorage();
+        
+        if (!walletConnected || !contract) {
+            console.log("Running in demo mode - no contract available");
+            updateStatus('Pixels updated in demo mode!', 'success');
+            drawCanvas();
+            clearSelection();
+            
+            // Set a mock cooldown
+            cooldownEndTime = Date.now() + 60000; // 1 minute cooldown
+            updateCooldownTimer();
+            cooldownInterval = setInterval(updateCooldownTimer, 1000);
+            
+            // Update Firestore if enabled
+            if (db) {
+                updateFirestoreCanvas();
+            }
+            
+            return;
+        }
         
         // Prepare transaction data
         const xCoords = selectedPixels.map(p => p.x);
@@ -427,17 +510,13 @@ async function submitPixelsToBlockchain() {
         
         updateStatus('Pixels updated successfully!', 'success');
         
-        // Update local state
-        selectedPixels.forEach(pixel => {
-            const index = pixel.y * CANVAS_WIDTH + pixel.x;
-            canvasData[index] = pixel.color;
-        });
-        
         // Clear selection
         clearSelection();
         
-        // Update Firestore with new canvas data
-        updateFirestoreCanvas();
+        // Update Firestore if enabled
+        if (db) {
+            updateFirestoreCanvas();
+        }
         
         // Set cooldown
         await checkCooldown();
@@ -449,7 +528,7 @@ async function submitPixelsToBlockchain() {
 
 // Check cooldown period
 async function checkCooldown() {
-    if (!walletConnected) return;
+    if (!walletConnected || !contract) return;
     
     try {
         const userAddress = await signer.getAddress();
@@ -485,87 +564,62 @@ function updateCooldownTimer() {
     }
 }
 
-// Fetch canvas data from blockchain
+// Fetch canvas from blockchain with fallback to localStorage
 async function fetchCanvasFromBlockchain() {
-    if (!walletConnected) return;
+    let loadedFromBlockchain = false;
     
-    try {
-        updateStatus('Fetching canvas from blockchain...', 'info');
-        
-        // This is inefficient but works for demonstration purposes
-        // In a production app, you'd want to use events or a more efficient batch fetch method
-        for (let y = 0; y < CANVAS_HEIGHT; y++) {
-            for (let x = 0; x < CANVAS_WIDTH; x++) {
-                const color = await contract.get_pixel(x, y);
-                const index = y * CANVAS_WIDTH + x;
-                canvasData[index] = color;
+    if (walletConnected && contract) {
+        try {
+            updateStatus('Fetching canvas from blockchain...', 'info');
+            
+            // Try to fetch from blockchain
+            for (let y = 0; y < CANVAS_HEIGHT; y++) {
+                for (let x = 0; x < CANVAS_WIDTH; x++) {
+                    try {
+                        const color = await contract.get_pixel(x, y);
+                        const index = y * CANVAS_WIDTH + x;
+                        canvasData[index] = color;
+                        loadedFromBlockchain = true;
+                    } catch (error) {
+                        console.error(`Error fetching pixel at ${x},${y}:`, error);
+                    }
+                }
+            }
+            
+            if (loadedFromBlockchain) {
+                updateStatus('Canvas loaded from blockchain successfully', 'success');
+                // Save to localStorage for future use
+                saveCanvasToLocalStorage();
+            }
+        } catch (error) {
+            console.error('Fetch canvas error:', error);
+            updateStatus('Failed to fetch canvas from blockchain', 'error');
+        }
+    }
+    
+    // If we couldn't load from blockchain, try localStorage
+    if (!loadedFromBlockchain) {
+        if (loadCanvasFromLocalStorage()) {
+            updateStatus('Canvas loaded from local storage', 'info');
+        } else {
+            // Initialize with a blank canvas
+            console.log('Initializing blank canvas');
+            for (let i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) {
+                canvasData[i] = 0; // White
             }
         }
-        
-        drawCanvas();
-        updateStatus('Canvas loaded successfully', 'success');
-        
-        // Update Firestore with the latest data
+    }
+    
+    // Draw the canvas with whatever data we have
+    drawCanvas();
+    
+    // Update Firestore if enabled
+    if (db) {
         updateFirestoreCanvas();
-    } catch (error) {
-        console.error('Fetch canvas error:', error);
-        updateStatus('Failed to fetch canvas from blockchain', 'error');
     }
 }
 
 // Update Firestore with canvas data
-function updateFirestoreCanvas() {
-    db.collection('canvas').doc('current').set({
-        data: canvasData,
-        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-    })
-    .catch(error => {
-        console.error('Firestore update error:', error);
-    });
-}
-
-// Subscribe to canvas updates in Firestore
-function subscribeToCanvasUpdates() {
-    db.collection('canvas').doc('current').onSnapshot(doc => {
-        if (doc.exists) {
-            const data = doc.data();
-            if (data && data.data) {
-                canvasData = data.data;
-                drawCanvas();
-            }
-        }
-    }, error => {
-        console.error('Firestore subscription error:', error);
-    });
-}
-
-// Initialize the app when page loads
-window.addEventListener('DOMContentLoaded', init);
-
-// Add this function to your app.js file to make the app more resilient to Firebase errors
-
-// Modified Firebase initialization with error handling
-function initializeFirebase() {
-    // Check if Firebase config has been properly set
-    const isConfigValid = firebaseConfig && 
-                         firebaseConfig.apiKey !== "YOUR_API_KEY" &&
-                         firebaseConfig.projectId !== "YOUR_PROJECT_ID";
-    
-    if (!isConfigValid) {
-        console.warn("Firebase configuration is missing or using placeholder values. Firestore functionality will be limited.");
-        return false;
-    }
-    
-    try {
-        firebase.initializeApp(firebaseConfig);
-        return true;
-    } catch (error) {
-        console.error("Firebase initialization error:", error);
-        return false;
-    }
-}
-
-// Modified Firestore functions with fallbacks
 function updateFirestoreCanvas() {
     // Skip Firestore operations if Firebase isn't properly configured
     if (!db) {
@@ -586,6 +640,7 @@ function updateFirestoreCanvas() {
     }
 }
 
+// Subscribe to canvas updates in Firestore
 function subscribeToCanvasUpdates() {
     // Skip Firestore operations if Firebase isn't properly configured
     if (!db) {
@@ -610,36 +665,5 @@ function subscribeToCanvasUpdates() {
     }
 }
 
-// In your init function, update to:
-async function init() {
-    try {
-        // Load ABI
-        const response = await fetch('./contract/abi.json');
-        contractABI = await response.json();
-        
-        // Set up event listeners
-        setupEventListeners();
-        
-        // Initialize canvas
-        initCanvas();
-        
-        // Initialize color palette
-        initColorPalette();
-        
-        // Initialize Firebase with error handling
-        const firebaseInitialized = initializeFirebase();
-        if (firebaseInitialized) {
-            db = firebase.firestore();
-            // Subscribe to canvas updates in Firestore
-            subscribeToCanvasUpdates();
-        }
-        
-        // Try to connect to previously connected wallet
-        if (window.ethereum && window.ethereum.selectedAddress) {
-            connectWallet();
-        }
-    } catch (error) {
-        console.error('Initialization error:', error);
-        updateStatus('Failed to initialize the application', 'error');
-    }
-}
+// Initialize the app when page loads
+window.addEventListener('DOMContentLoaded', init);
