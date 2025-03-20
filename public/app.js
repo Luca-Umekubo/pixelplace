@@ -12,6 +12,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// Add this at the top of your app.js file after the ethers library is loaded
+console.log("Ethers version:", ethers.version);
+
 // Contract configuration
 const contractAddress = "0xaC2F161898a9541292C9D35e0aeB496709131248"; // Fill after deployment
 const CANVAS_WIDTH = 100;
