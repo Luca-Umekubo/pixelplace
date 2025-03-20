@@ -140,30 +140,79 @@ function initColorPalette() {
 // Connect wallet
 async function connectWallet() {
     try {
+        console.log("Connecting wallet...");
         if (!window.ethereum) {
+            console.error("No wallet provider found");
             updateStatus('MetaMask or other Web3 wallet not detected', 'error');
             return;
         }
         
+        console.log("Requesting accounts...");
         // Request accounts access
         await window.ethereum.request({ method: 'eth_requestAccounts' });
         
-        // Set up provider and signer
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        signer = provider.getSigner();
-        const userAddress = await signer.getAddress();
+        console.log("Setting up provider...");
+        console.log("Ethers version or type:", typeof ethers, ethers.version);
         
-        // Check if we're on Sepolia testnet
+        // Different approach based on how ethers is structured
+        if (typeof ethers.BrowserProvider === 'function') {
+            // Ethers v6 approach
+            console.log("Using ethers v6 approach");
+            provider = new ethers.BrowserProvider(window.ethereum);
+            signer = await provider.getSigner();
+        } else if (ethers.providers && typeof ethers.providers.Web3Provider === 'function') {
+            // Ethers v5 approach
+            console.log("Using ethers v5 approach");
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            signer = provider.getSigner();
+        } else {
+            // Direct approach if structure is different
+            console.log("Using direct ethers approach");
+            provider = new ethers.JsonRpcProvider(window.ethereum);
+            signer = provider.getSigner();
+        }
+        
+        const userAddress = await signer.getAddress();
+        console.log("Connected address:", userAddress);
+        
+        // Check network - works with both v5 and v6
         const network = await provider.getNetwork();
-        if (network.chainId !== 11155111) { // Sepolia chain ID
-            updateStatus('Please switch to Sepolia testnet in your wallet', 'error');
-            walletStatusDiv.textContent = 'Connected to wrong network';
-            walletStatusDiv.className = 'error';
-            return;
+        console.log("Connected to network:", network);
+        
+        // Different chainId property location in v5 vs v6
+        const chainId = network.chainId ? network.chainId : network.id;
+        if (chainId !== 11155111n && chainId !== 11155111) { // Support both BigInt and Number
+            console.error("Wrong network");
+            
+            // Try to switch network
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0xaa36a7' }], // 0xaa36a7 is hex for 11155111 (Sepolia)
+                });
+                // Reload the page after network switch
+                window.location.reload();
+                return;
+            } catch (switchError) {
+                console.error("Failed to switch network:", switchError);
+                updateStatus('Please switch to Sepolia testnet in your wallet', 'error');
+                walletStatusDiv.textContent = 'Connected to wrong network';
+                walletStatusDiv.className = 'error';
+                return;
+            }
         }
         
         // Initialize contract
-        contract = new ethers.Contract(contractAddress, contractABI, signer);
+        console.log("Contract address:", contractAddress);
+        console.log("Contract ABI:", contractABI);
+        
+        if (ethers.version && ethers.version.startsWith('6.')) {
+            // Ethers v6
+            contract = new ethers.Contract(contractAddress, contractABI, signer);
+        } else {
+            // Ethers v5
+            contract = new ethers.Contract(contractAddress, contractABI, signer);
+        }
         
         // Update UI
         walletConnected = true;
@@ -184,7 +233,7 @@ async function connectWallet() {
         window.ethereum.on('chainChanged', () => window.location.reload());
     } catch (error) {
         console.error('Connection error:', error);
-        updateStatus('Failed to connect wallet', 'error');
+        updateStatus('Failed to connect wallet: ' + error.message, 'error');
     }
 }
 
@@ -492,3 +541,105 @@ function subscribeToCanvasUpdates() {
 
 // Initialize the app when page loads
 window.addEventListener('DOMContentLoaded', init);
+
+// Add this function to your app.js file to make the app more resilient to Firebase errors
+
+// Modified Firebase initialization with error handling
+function initializeFirebase() {
+    // Check if Firebase config has been properly set
+    const isConfigValid = firebaseConfig && 
+                         firebaseConfig.apiKey !== "YOUR_API_KEY" &&
+                         firebaseConfig.projectId !== "YOUR_PROJECT_ID";
+    
+    if (!isConfigValid) {
+        console.warn("Firebase configuration is missing or using placeholder values. Firestore functionality will be limited.");
+        return false;
+    }
+    
+    try {
+        firebase.initializeApp(firebaseConfig);
+        return true;
+    } catch (error) {
+        console.error("Firebase initialization error:", error);
+        return false;
+    }
+}
+
+// Modified Firestore functions with fallbacks
+function updateFirestoreCanvas() {
+    // Skip Firestore operations if Firebase isn't properly configured
+    if (!db) {
+        console.log("Skipping Firestore update - Firebase not configured");
+        return;
+    }
+
+    try {
+        db.collection('canvas').doc('current').set({
+            data: canvasData,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .catch(error => {
+            console.error('Firestore update error:', error);
+        });
+    } catch (error) {
+        console.error("Error updating Firestore:", error);
+    }
+}
+
+function subscribeToCanvasUpdates() {
+    // Skip Firestore operations if Firebase isn't properly configured
+    if (!db) {
+        console.log("Skipping Firestore subscription - Firebase not configured");
+        return;
+    }
+
+    try {
+        db.collection('canvas').doc('current').onSnapshot(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                if (data && data.data) {
+                    canvasData = data.data;
+                    drawCanvas();
+                }
+            }
+        }, error => {
+            console.error('Firestore subscription error:', error);
+        });
+    } catch (error) {
+        console.error("Error subscribing to Firestore:", error);
+    }
+}
+
+// In your init function, update to:
+async function init() {
+    try {
+        // Load ABI
+        const response = await fetch('./contract/abi.json');
+        contractABI = await response.json();
+        
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Initialize canvas
+        initCanvas();
+        
+        // Initialize color palette
+        initColorPalette();
+        
+        // Initialize Firebase with error handling
+        const firebaseInitialized = initializeFirebase();
+        if (firebaseInitialized) {
+            db = firebase.firestore();
+            // Subscribe to canvas updates in Firestore
+            subscribeToCanvasUpdates();
+        }
+        
+        // Try to connect to previously connected wallet
+        if (window.ethereum && window.ethereum.selectedAddress) {
+            connectWallet();
+        }
+    } catch (error) {
+        console.error('Initialization error:', error);
+        updateStatus('Failed to initialize the application', 'error');
+    }
+}
