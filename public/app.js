@@ -1,14 +1,14 @@
 // Firebase initialization
 const firebaseConfig = {
-    // Fill in your Firebase config here
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
-
+    apiKey: "AIzaSyAA7760MtOIQ4ulFwJyoToa3X1nvYxo8Aw",
+    authDomain: "pixelplaceeth.firebaseapp.com",
+    projectId: "pixelplaceeth",
+    storageBucket: "pixelplaceeth.firebasestorage.app",
+    messagingSenderId: "757687507121",
+    appId: "1:757687507121:web:1313f3d96da4d2a7dcaa90",
+    measurementId: "G-T1SK2VJ19G"
+  };
+  
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
