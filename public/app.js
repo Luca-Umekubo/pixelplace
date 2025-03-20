@@ -1,22 +1,19 @@
 // Firebase initialization
 const firebaseConfig = {
-    apiKey: "AIzaSyAA7760MtOIQ4ulFwJyoToa3X1nvYxo8Aw",
-    authDomain: "pixelplaceeth.firebaseapp.com",
-    projectId: "pixelplaceeth",
-    storageBucket: "pixelplaceeth.firebasestorage.app",
-    messagingSenderId: "757687507121",
-    appId: "1:757687507121:web:1313f3d96da4d2a7dcaa90",
-    measurementId: "G-T1SK2VJ19G"
-  };
+    // Fill in your Firebase config here
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// Add this at the top of your app.js file after the ethers library is loaded
-console.log("Ethers version:", ethers.version);
-
 // Contract configuration
-const contractAddress = "0xaC2F161898a9541292C9D35e0aeB496709131248"; // Fill after deployment
+const contractAddress = "YOUR_CONTRACT_ADDRESS"; // Fill after deployment
 const CANVAS_WIDTH = 100;
 const CANVAS_HEIGHT = 100;
 const MAX_PIXELS_PER_TRANSACTION = 25;
@@ -47,22 +44,22 @@ const cooldownTimerDiv = document.getElementById('cooldown-timer');
 
 // Color palette - 16 colors
 const colors = [
-    '#FFFFFF', // White
     '#000000', // Black
+    '#808080', // Grey
+    '#D3D3D3', // Light Grey
+    '#FFFFFF', // White
     '#FF0000', // Red
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#FFFF00', // Yellow
-    '#FF00FF', // Magenta
-    '#00FFFF', // Cyan
     '#FFA500', // Orange
+    '#8B4513', // Brown
+    '#FFFF00', // Yellow
+    '#90EE90', // Light Green
+    '#008000', // Green
+    '#ADD8E6', // Light Blue
+    '#0000FF', // Blue
+    '#00008B', // Dark Blue
     '#800080', // Purple
-    '#008000', // Dark Green
-    '#A52A2A', // Brown
-    '#808080', // Gray
     '#FFC0CB', // Pink
-    '#FFD700', // Gold
-    '#87CEEB'  // Sky Blue
+    '#F5DEB3'  // Tan/Skin color
 ];
 
 // Initialize app
@@ -143,70 +140,30 @@ function initColorPalette() {
 // Connect wallet
 async function connectWallet() {
     try {
-        console.log("Connecting wallet...");
         if (!window.ethereum) {
-            console.error("No wallet provider found");
             updateStatus('MetaMask or other Web3 wallet not detected', 'error');
             return;
         }
         
-        console.log("Requesting accounts...");
         // Request accounts access
         await window.ethereum.request({ method: 'eth_requestAccounts' });
         
-        console.log("Setting up provider...");
-        // Check if we're using ethers v5 or v6
-        if (ethers.version && ethers.version.startsWith('6.')) {
-            // Ethers v6 approach
-            provider = new ethers.BrowserProvider(window.ethereum);
-            signer = await provider.getSigner();
-        } else {
-            // Ethers v5 approach
-            provider = new ethers.providers.Web3Provider(window.ethereum);
-            signer = provider.getSigner();
-        }
-        
+        // Set up provider and signer
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        signer = provider.getSigner();
         const userAddress = await signer.getAddress();
-        console.log("Connected address:", userAddress);
         
-        // Check network - works with both v5 and v6
+        // Check if we're on Sepolia testnet
         const network = await provider.getNetwork();
-        console.log("Connected to network:", network);
-        
-        // Different chainId property location in v5 vs v6
-        const chainId = network.chainId ? network.chainId : network.id;
-        if (chainId !== 11155111n && chainId !== 11155111) { // Support both BigInt and Number
-            console.error("Wrong network");
-            
-            // Try to switch network
-            try {
-                await window.ethereum.request({
-                    method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: '0xaa36a7' }], // 0xaa36a7 is hex for 11155111 (Sepolia)
-                });
-                // Reload the page after network switch
-                window.location.reload();
-                return;
-            } catch (switchError) {
-                console.error("Failed to switch network:", switchError);
-                updateStatus('Please switch to Sepolia testnet in your wallet', 'error');
-                walletStatusDiv.textContent = 'Connected to wrong network';
-                walletStatusDiv.className = 'error';
-                return;
-            }
+        if (network.chainId !== 11155111) { // Sepolia chain ID
+            updateStatus('Please switch to Sepolia testnet in your wallet', 'error');
+            walletStatusDiv.textContent = 'Connected to wrong network';
+            walletStatusDiv.className = 'error';
+            return;
         }
         
         // Initialize contract
-        console.log("Contract address:", contractAddress);
-        console.log("Contract ABI:", contractABI);
-        
-        if (ethers.version && ethers.version.startsWith('6.')) {
-            // Ethers v6
-            contract = new ethers.Contract(contractAddress, contractABI, signer);
-        } else {
-            // Ethers v5
-            contract = new ethers.Contract(contractAddress, contractABI, signer);
-        }
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
         
         // Update UI
         walletConnected = true;
@@ -227,7 +184,7 @@ async function connectWallet() {
         window.ethereum.on('chainChanged', () => window.location.reload());
     } catch (error) {
         console.error('Connection error:', error);
-        updateStatus('Failed to connect wallet: ' + error.message, 'error');
+        updateStatus('Failed to connect wallet', 'error');
     }
 }
 
@@ -340,14 +297,19 @@ function drawCanvas() {
         ctx.fillStyle = colors[pixel.color];
         ctx.fillRect(pixel.x * pixelSize, pixel.y * pixelSize, pixelSize, pixelSize);
         
-        // Add a border to show it's selected
+        // Add a more visible border to show it's selected
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 2;
         ctx.strokeRect(pixel.x * pixelSize, pixel.y * pixelSize, pixelSize, pixelSize);
+        
+        // Add a second, inner highlight for better visibility
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(pixel.x * pixelSize + 2, pixel.y * pixelSize + 2, pixelSize - 4, pixelSize - 4);
     });
     
-    // Draw grid (optional - can be removed for performance)
-    ctx.strokeStyle = '#DDDDDD';
+    // Draw grid - improved visibility for the larger canvas
+    ctx.strokeStyle = '#E0E0E0';
     ctx.lineWidth = 0.5;
     
     for (let x = 0; x <= CANVAS_WIDTH; x++) {
@@ -363,6 +325,28 @@ function drawCanvas() {
         ctx.lineTo(CANVAS_WIDTH * pixelSize, y * pixelSize);
         ctx.stroke();
     }
+    
+    // Add hover effect for better pixel selection
+    canvas.onmousemove = function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = Math.floor((e.clientX - rect.left) / (canvas.width / CANVAS_WIDTH));
+        const mouseY = Math.floor((e.clientY - rect.top) / (canvas.height / CANVAS_HEIGHT));
+        
+        // Only show hover effect if we're within bounds and not during cooldown
+        if (mouseX >= 0 && mouseX < CANVAS_WIDTH && mouseY >= 0 && mouseY < CANVAS_HEIGHT && 
+            walletConnected && cooldownEndTime <= Date.now()) {
+            
+            // Check if we're not hovering over an already selected pixel
+            const isSelected = selectedPixels.some(p => p.x === mouseX && p.y === mouseY);
+            
+            if (!isSelected) {
+                // Draw hover effect
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(mouseX * pixelSize, mouseY * pixelSize, pixelSize, pixelSize);
+            }
+        }
+    };
 }
 
 // Submit pixels to blockchain

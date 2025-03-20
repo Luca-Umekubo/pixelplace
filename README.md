@@ -1,4 +1,4 @@
-# pixelplace
+# pixelplace / Web3 Pixel Canvas
 
 this website is a decentralized public pixel canvas hosted on the blockchain. it allows users to connect their wallets, select the pixel changes that they want made, and then submit their changes to the sepolia testnet blockchain, using firebase hosting to see the real time updates.
 
